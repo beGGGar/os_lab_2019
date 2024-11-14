@@ -38,27 +38,34 @@ int main(int argc, char **argv) {
     switch (c) {
       case 0:
         switch (option_index) {
-          case 0:
+          case 0: // --seed
             seed = atoi(optarg);
-            // your code here
-            // error handling
+            if (seed < 0) {  // Если seed отрицателен
+              fprintf(stderr, "Error: seed must be a non-negative integer.\n");
+              return 1;  
+            }
             break;
-          case 1:
+          case 1: // --array_size
             array_size = atoi(optarg);
-            // your code here
-            // error handling
+            if (array_size <= 0) {  // Если размер массива меньше или равен 0
+              fprintf(stderr, "Error: array_size must be a positive integer.\n");
+              return 1;  
+            }
             break;
-          case 2:
+          case 2: // --pnum
             pnum = atoi(optarg);
-            // your code here
-            // error handling
+            if (pnum <= 0) {  // Если количество процессов меньше или равно 0
+              fprintf(stderr, "Error: pnum must be a positive integer.\n");
+              return 1;  
+            }
             break;
-          case 3:
+          case 3: // --by_files
             with_files = true;
             break;
 
           defalut:
             printf("Index %d is out of options\n", option_index);
+            return 1;
         }
         break;
       case 'f':
@@ -116,8 +123,9 @@ int main(int argc, char **argv) {
   }
 
   while (active_child_processes > 0) {
-    // your code here
+    wait(NULL);  // Блокирует выполнение, пока любой дочерний процесс не завершится
 
+    // Уменьшаем счетчик активных дочерних процессов
     active_child_processes -= 1;
   }
 
