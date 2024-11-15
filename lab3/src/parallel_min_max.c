@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
             with_files = true;
             break;
 
-          defalut:
+          default:
             printf("Index %d is out of options\n", option_index);
             return 1;
         }
@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
   }
 
   if (optind < argc) {
-    printf("Has at least one no option argument\n");
+    printf("Has at least one no option argument\n%d %d\n", optind, argc);
     return 1;
   }
 
@@ -97,6 +97,21 @@ int main(int argc, char **argv) {
 
   struct timeval start_time;
   gettimeofday(&start_time, NULL);
+  int chunk_size = array_size/pnum;
+  
+  // для pipe
+  int pipes[pnum][2];
+  if (!with_files){
+    
+    for (int i = 0; i < 3; i++) {
+        if (pipe(pipes[i]) == -1) {
+            printf("pipe");
+            exit(1);
+        }
+    }
+
+  }
+  
 
   for (int i = 0; i < pnum; i++) {
     pid_t child_pid = fork();
@@ -105,13 +120,26 @@ int main(int argc, char **argv) {
       active_child_processes += 1;
       if (child_pid == 0) {
         // child process
-
-        // parallel somehow
+        // определение границ
+        int start = i*chunk_size;
+        int end = (i == pnum - 1) ? array_size : (i + 1) * chunk_size;
+        
+        struct MinMax min_max = GetMinMax(array, start, end);
 
         if (with_files) {
           // use files here
+          char filename[64];
+          sprintf(filename, "result_%d.txt", i);
+          FILE *file = fopen(filename, "w");
+          if (file) {
+            fprintf(file, "%d\n%d", min_max.min, min_max.max);
+            fclose(file);
+          }
         } else {
           // use pipe here
+          close(pipes[i][0]); // закрыть чтение
+          write(pipes[i][1], &min_max, sizeof(min_max));
+          close(pipes[i][1]);  // закрыть запись
         }
         return 0;
       }
@@ -139,13 +167,30 @@ int main(int argc, char **argv) {
 
     if (with_files) {
       // read from files
+      char filename[64];
+      sprintf(filename, "result_%d.txt", i);
+      FILE *file = fopen(filename, "r");
+      if (file) {
+        fscanf(file, "%d\n%d", &min, &max);
+        fclose(file);
+        if (remove(filename) != 0) {
+          perror("Error deleting file");
+        }
+      }
     } else {
       // read from pipes
+        read(pipes[i][0], &min_max, sizeof(min_max));
+        close(pipes[i][0]);
     }
 
     if (min < min_max.min) min_max.min = min;
     if (max > min_max.max) min_max.max = max;
   }
+
+  // // закрытие труб
+  // for (int i = 0; i < pnum; i++) {
+  //   close(pipes[i][0]); // Закрытие пайпа для чтения в родительском процессе
+  // }
 
   struct timeval finish_time;
   gettimeofday(&finish_time, NULL);
