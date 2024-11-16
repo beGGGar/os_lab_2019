@@ -93,9 +93,6 @@ int main(int argc, char **argv) {
 
   int *array = malloc(sizeof(int) * array_size);
   GenerateArray(array, array_size, seed);
-  for (int i = 0; i < array_size; i++){
-    printf("%d\n", array[i]);
-  }
   int active_child_processes = 0;
 
   struct timeval start_time;
