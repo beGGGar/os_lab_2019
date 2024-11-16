@@ -93,6 +93,9 @@ int main(int argc, char **argv) {
 
   int *array = malloc(sizeof(int) * array_size);
   GenerateArray(array, array_size, seed);
+  for (int i = 0; i < array_size; i++){
+    printf("%d\n", array[i]);
+  }
   int active_child_processes = 0;
 
   struct timeval start_time;
@@ -103,9 +106,9 @@ int main(int argc, char **argv) {
   int pipes[pnum][2];
   if (!with_files){
     
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < pnum; i++) {
         if (pipe(pipes[i]) == -1) {
-            printf("pipe");
+            printf("pipe_err");
             exit(1);
         }
     }
@@ -164,6 +167,7 @@ int main(int argc, char **argv) {
   for (int i = 0; i < pnum; i++) {
     int min = INT_MAX;
     int max = INT_MIN;
+    struct MinMax min_max_buff;
 
     if (with_files) {
       // read from files
@@ -178,9 +182,12 @@ int main(int argc, char **argv) {
         }
       }
     } else {
+      
       // read from pipes
-        read(pipes[i][0], &min_max, sizeof(min_max));
+        read(pipes[i][0], &min_max_buff, sizeof(min_max));
         close(pipes[i][0]);
+        min = min_max_buff.min;
+        max = min_max_buff.max;
     }
 
     if (min < min_max.min) min_max.min = min;
