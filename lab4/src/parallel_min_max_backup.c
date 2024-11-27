@@ -20,23 +20,6 @@ int main(int argc, char **argv) {
   int array_size = -1;
   int pnum = -1;
   bool with_files = false;
-  int timeout = -1;  // Таймаут в секундах
-  bool is_timeout = false;
-
-  pid_t *child_pids = NULL;
-
-  /*
-    Прерывает выполнение при получении сигнала
-  */
-  void handle_alarm(int sig) {
-    printf("Timeout reached, sending SIGKILL to child processes\n");
-    is_timeout = true;
-    for (int i = 0; i < pnum; i++) {
-      if (child_pids[i] > 0) {
-        kill(child_pids[i], SIGKILL);  // Отправляем сигнал SIGKILL
-      }
-    }
-  }
 
   while (true) {
     int current_optind = optind ? optind : 1;
@@ -45,7 +28,6 @@ int main(int argc, char **argv) {
                                       {"array_size", required_argument, 0, 0},
                                       {"pnum", required_argument, 0, 0},
                                       {"by_files", no_argument, 0, 'f'},
-                                      {"timeout", required_argument, 0, 0},
                                       {0, 0, 0, 0}};
 
     int option_index = 0;
@@ -81,13 +63,6 @@ int main(int argc, char **argv) {
             with_files = true;
             break;
 
-          case 4: // --timeout
-            timeout = atoi(optarg);
-             if (timeout < 0) {
-              fprintf(stderr, "Error: timeout must be a non-negative integer.\n");
-              return 1;
-            }
-          break;
           default:
             printf("Index %d is out of options\n", option_index);
             return 1;
@@ -120,12 +95,6 @@ int main(int argc, char **argv) {
   GenerateArray(array, array_size, seed);
   int active_child_processes = 0;
 
-  // установка timeout
-  if (timeout != -1) {
-    signal(SIGALRM, handle_alarm);  // Устанавливаем обработчик для SIGALRM
-    alarm(timeout);  // Устанавливаем таймер на таймаут
-  }
-
   struct timeval start_time;
   gettimeofday(&start_time, NULL);
   int chunk_size = array_size/pnum;
@@ -143,18 +112,13 @@ int main(int argc, char **argv) {
 
   }
   
-  child_pids = malloc(pnum * sizeof(pid_t));
 
   for (int i = 0; i < pnum; i++) {
-    child_pids[i] = fork();
-    sleep(10000);
-    /*
-      Дочерние процессы закрываются хендлером, но маин процесс все еще спит. Не понимаю как решить
-    */
-    if (child_pids[i] >= 0) {
+    pid_t child_pid = fork();
+    if (child_pid >= 0) {
       // successful fork
       active_child_processes += 1;
-      if (child_pids[i] == 0) {
+      if (child_pid == 0) {
         // child process
         // определение границ
         int start = i*chunk_size;
@@ -187,23 +151,11 @@ int main(int argc, char **argv) {
   }
 
   while (active_child_processes > 0) {
-    if (is_timeout){
-      break;
-    }
-    
     wait(NULL);  // Блокирует выполнение, пока любой дочерний процесс не завершится
 
     // Уменьшаем счетчик активных дочерних процессов
     active_child_processes -= 1;
   }
-
-  //  while (active_child_processes > 0) {
-  //   pid_t finished_pid = waitpid(-1, NULL, WNOHANG);
-  //   if (finished_pid > 0) {
-  //     active_child_processes -= 1;
-  //   }
-  //   usleep(100000);  // 100 миллисекунд
-  // }
 
   struct MinMax min_max;
   min_max.min = INT_MAX;
@@ -251,7 +203,6 @@ int main(int argc, char **argv) {
   elapsed_time += (finish_time.tv_usec - start_time.tv_usec) / 1000.0;
 
   free(array);
-  free(child_pids);
 
   printf("Min: %d\n", min_max.min);
   printf("Max: %d\n", min_max.max);
