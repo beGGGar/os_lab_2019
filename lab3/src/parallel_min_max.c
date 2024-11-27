@@ -15,19 +15,35 @@
 #include "find_min_max.h"
 #include "utils.h"
 
+
+
 int main(int argc, char **argv) {
   int seed = -1;
   int array_size = -1;
   int pnum = -1;
   bool with_files = false;
+  int timeout = -1;
+
+  pid_t *child_pids[] = NULL;
+  bool timer_triger = false;
+
+  // обработка сигнала SIGALRM
+  void handle_alarm(){
+    timer_triger = true;
+    for (int i = 0; i < pnum; i++){
+      kill(child_pids[i], SIGKILL);
+    }
+  }
 
   while (true) {
+    printf("while check");
     int current_optind = optind ? optind : 1;
 
     static struct option options[] = {{"seed", required_argument, 0, 0},
                                       {"array_size", required_argument, 0, 0},
                                       {"pnum", required_argument, 0, 0},
                                       {"by_files", no_argument, 0, 'f'},
+                                      {"timeout", no_argument, 0, 0},
                                       {0, 0, 0, 0}};
 
     int option_index = 0;
@@ -48,29 +64,47 @@ int main(int argc, char **argv) {
           case 1: // --array_size
             array_size = atoi(optarg);
             if (array_size <= 0) {  // Если размер массива меньше или равен 0
-              fprintf(stderr, "Error: array_size must be a positive integer.\n");
+              printf("Error: array_size must be a positive integer.\n");
               return 1;  
             }
             break;
           case 2: // --pnum
             pnum = atoi(optarg);
+            printf("pnum = %d", pnum);
             if (pnum <= 0) {  // Если количество процессов меньше или равно 0
-              fprintf(stderr, "Error: pnum must be a positive integer.\n");
+              printf("Error: pnum must be a positive integer.\n");
               return 1;  
             }
             break;
           case 3: // --by_files
             with_files = true;
+            printf("Case 3 f");
             break;
 
+          case 4: // --timeout
+            printf("Case 4 t");
+            timeout = atoi(optarg);
+            if (timeout <0){
+              printf("Error: timeout must be a positive integer")
+              return 1;
+            }
+            break;
           default:
             printf("Index %d is out of options\n", option_index);
             return 1;
         }
         break;
       case 'f':
+      printf("Case f f");
         with_files = true;
-        break;
+        break;  
+
+      case 't':
+      printf("Case t t");
+        if (timeout >= 0) {
+          signal(SIGALRM, handle_alarm);  // Устанавливаем обработчик для SIGALRM
+          alarm(timeout);  // Устанавливаем таймер на timeout секунд
+        } 
 
       case '?':
         break;
@@ -102,23 +136,21 @@ int main(int argc, char **argv) {
   // для pipe
   int pipes[pnum][2];
   if (!with_files){
-    
     for (int i = 0; i < pnum; i++) {
-        if (pipe(pipes[i]) == -1) {
-            printf("pipe_err");
-            exit(1);
-        }
+      if (pipe(pipes[i]) == -1) {
+          printf("pipe_err");
+          exit(1);
+      }
     }
-
   }
   
 
   for (int i = 0; i < pnum; i++) {
-    pid_t child_pid = fork();
-    if (child_pid >= 0) {
+    child_pids[i] = fork();
+    if (child_pids[i] >= 0) {
       // successful fork
       active_child_processes += 1;
-      if (child_pid == 0) {
+      if (child_pids[i] == 0) {
         // child process
         // определение границ
         int start = i*chunk_size;
@@ -191,10 +223,6 @@ int main(int argc, char **argv) {
     if (max > min_max.max) min_max.max = max;
   }
 
-  // // закрытие труб
-  // for (int i = 0; i < pnum; i++) {
-  //   close(pipes[i][0]); // Закрытие пайпа для чтения в родительском процессе
-  // }
 
   struct timeval finish_time;
   gettimeofday(&finish_time, NULL);
